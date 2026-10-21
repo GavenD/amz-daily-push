@@ -553,7 +553,7 @@ def main():
         save_sent(sent)
         return
 
-    title = "亚马逊美国站每日简报（官方%d·论坛%d）" % (len(official), len(forum))
+    title = "亚马逊US每日简报（官方%d·论坛%d）" % (len(official), len(forum))
     resp = push(token, title, html)
     log("PushPlus 响应：%s" % json.dumps(resp, ensure_ascii=False))
     if resp.get("code") != 200:

@@ -37,8 +37,8 @@ SENT_FILE = os.path.join(HERE, "data", "sent.json")
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/120.0 Safari/537.36")
 
-MAX_OFFICIAL = 6
-MAX_FORUM = 5
+MAX_OFFICIAL = 12
+MAX_FORUM = 10
 WEEKDAY_CN = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
 
 # 会员大促日期（亚马逊每年单独公布，无固定规则，需每年更新；同月起止）
@@ -158,19 +158,6 @@ def is_us_en(title):
 
 
 # ---------------------------------------------------------------- 官方源
-def html_to_paras(content_html):
-    paras = []
-    for m in re.findall(r"<p[^>]*>(.*?)</p>", content_html, re.S):
-        t = re.sub(r"\s+", " ", html_lib.unescape(re.sub(r"<[^>]+>", "", m))).strip()
-        if len(t) >= 18:
-            paras.append(t)
-    if not paras:
-        full = re.sub(r"\s+", " ",
-                      html_lib.unescape(re.sub(r"<[^>]+>", "", content_html))).strip()
-        paras = [full] if full else []
-    return paras
-
-
 def fetch_official(sent, cutoff):
     h = fetch(OFFICIAL_URL)
     m = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', h, re.S)
@@ -185,12 +172,10 @@ def fetch_official(sent, cutoff):
         title_en = re.sub(r"\s+", " ", p.get("title", "")).strip()
         if not title_en or not is_us_en(title_en):
             continue
-        paras = html_to_paras(p.get("content", ""))
         items.append({
             "key": key,
             "date": dt.strftime("%Y-%m-%d"),
             "title_en": title_en,
-            "paras_en": paras[:3],
             "url": OFFICIAL_THREAD + p["threadId"],
         })
     items = items[:MAX_OFFICIAL]
@@ -198,16 +183,11 @@ def fetch_official(sent, cutoff):
 
 
 def translate_official(items):
-    """对官方英文条目逐条翻译标题与摘要。"""
-    log("官方候选 %d 篇，开始翻译..." % len(items))
+    """标题速览版：只翻译官方条目标题。"""
+    log("官方候选 %d 条，翻译标题 ..." % len(items))
     for it in items:
         it["title"] = translate(it["title_en"])
-        it["summary"] = []
-        for para in it["paras_en"]:
-            para = para if len(para) <= 400 else para[:400] + "…"
-            it["summary"].append(translate(para))
-            time.sleep(0.2)
-        time.sleep(0.3)
+        time.sleep(0.15)
     return items
 
 
@@ -217,11 +197,9 @@ def official_from_sample(path):
     items = []
     for it in d.get("official", []):
         key = "off:" + it["url"].rstrip("/").rsplit("/", 1)[-1]
-        body = it.get("body_en", "")
-        paras = [body[:400] + ("…" if len(body) > 400 else "")] if body else []
         items.append({
             "key": key, "date": it["date"], "title_en": it["title_en"],
-            "paras_en": paras, "url": it["url"],
+            "url": it["url"],
         })
     return translate_official(items[:MAX_OFFICIAL])
 
@@ -234,12 +212,9 @@ def forum_from_sample(path):
         title = html_lib.unescape(it["title"].strip())
         if not is_us_zh(title):
             continue
-        body = html_lib.unescape(re.sub(r"<[^>]+>", "", it.get("body", "")))
-        body = re.sub(r"\s+", " ", body).strip()
-        body = body[:220] + ("…" if len(body) > 220 else "")
         items.append({
             "key": "wsy:" + it["url"].rstrip("/").rsplit("/", 1)[-1],
-            "date": it["date"], "title": title, "summary": body, "url": it["url"],
+            "date": it["date"], "title": title, "url": it["url"],
         })
     return items[:MAX_FORUM]
 
@@ -263,15 +238,10 @@ def fetch_forum(sent, cutoff):
         title = html_lib.unescape(node.findtext("title") or "").strip()
         if not title or not is_us_zh(title):
             continue
-        desc = node.findtext("description") or ""
-        body = re.sub(r"\s+", " ",
-                      html_lib.unescape(re.sub(r"<[^>]+>", "", desc))).strip()
-        body = body[:220] + ("…" if len(body) > 220 else "")
         items.append({
             "key": key,
             "date": dt.strftime("%Y-%m-%d"),
             "title": title,
-            "summary": body,
             "url": link,
         })
     return items[:MAX_FORUM]
@@ -387,25 +357,19 @@ def esc(s):
 
 
 # ---------------------------------------------------------------- 渲染
-def article_card(tag, tag_color, title, date_str, summary, url):
-    if isinstance(summary, str):
-        paras = [summary]
-    else:
-        paras = summary
-    parts = [
-        '<div style="margin:0 18px 12px;border:1px solid #ececec;border-radius:10px;padding:13px;">',
-        '<span style="font-size:11px;color:#fff;background:%s;padding:2px 8px;border-radius:10px;">%s</span>'
-        % (tag_color, tag),
-        '<div style="font-size:15px;font-weight:600;color:#232f3e;margin:8px 0 4px;line-height:1.4;">%s</div>'
-        % esc(title),
-        '<div style="color:#aaa;font-size:12px;margin-bottom:8px;">%s</div>' % esc(date_str),
-    ]
-    for p in paras:
-        if p:
-            parts.append('<p style="margin:6px 0;font-size:13px;line-height:1.7;color:#444;">%s</p>' % esc(p))
-    parts.append('<a href="%s" style="color:#007185;font-size:12px;text-decoration:none;">阅读原文 ›</a></div>'
-                 % esc(url))
-    return "".join(parts)
+def article_card(tag, tag_color, title, date_str, url):
+    """标题速览卡片：整卡可点击跳原文，仅显示标签、标题、日期。"""
+    return (
+        f'<a href="{esc(url)}" style="display:block;text-decoration:none;margin:0 18px 8px;'
+        f'border:1px solid #ececec;border-radius:9px;padding:10px 12px;">'
+        f'<div style="display:flex;align-items:flex-start;gap:8px;">'
+        f'<span style="font-size:10px;color:#fff;background:{tag_color};padding:2px 7px;'
+        f'border-radius:8px;flex-shrink:0;margin-top:2px;">{tag}</span>'
+        f'<span style="font-size:14px;font-weight:600;color:#232f3e;line-height:1.45;flex:1;">'
+        f'{esc(title)}</span></div>'
+        f'<div style="color:#bbb;font-size:11px;margin-top:6px;">{esc(date_str)} · 点击查看原文</div>'
+        f'</a>'
+    )
 
 
 def section_title(text, color):
@@ -504,13 +468,11 @@ def build_html(official, forum, today):
     if official:
         body.append(section_title("官方公告", "#ff9900"))
         for it in official:
-            body.append(article_card("官方", "#ff9900", it["title"], it["date"],
-                                     it["summary"], it["url"]))
+            body.append(article_card("官方", "#ff9900", it["title"], it["date"], it["url"]))
     if forum:
         body.append(section_title("卖家论坛精选 · 知无不言", "#007185"))
         for it in forum:
-            body.append(article_card("论坛", "#007185", it["title"], it["date"],
-                                     it["summary"], it["url"]))
+            body.append(article_card("论坛", "#007185", it["title"], it["date"], it["url"]))
     if total == 0:
         body.append('<div style="padding:18px;color:#999;font-size:13px;">'
                     '今天两个信息源暂未发现新内容，全年大促日历见下方。</div>')

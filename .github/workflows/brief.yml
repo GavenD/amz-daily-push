@@ -26,7 +26,7 @@ jobs:
       - name: Run brief
         env:
           PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
-          LOOKBACK_DAYS: '3'
+          LOOKBACK_DAYS: '30'
         run: python amz_brief.py
 
       - name: Commit sent records

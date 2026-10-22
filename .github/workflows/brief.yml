@@ -2,7 +2,7 @@ name: Amazon US Daily Brief
 
 on:
   schedule:
-   - cron: '0 2 * * *'   # 每天 UTC 2:00 = 北京时间 10:00
+    - cron: '0 2 * * *'   # 每天 UTC 2:00 = 北京时间 10:00
   workflow_dispatch:      # 允许在 Actions 页面手动运行
 
 permissions:
@@ -11,6 +11,7 @@ permissions:
 jobs:
   send:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4

@@ -1,4 +1,4 @@
-x8name: Amazon US Daily Brief
+name: Amazon US Daily Brief
 
 on:
   schedule:
